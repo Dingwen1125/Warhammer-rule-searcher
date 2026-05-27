@@ -5,6 +5,7 @@ from __future__ import annotations
 from langchain_openai import ChatOpenAI
 
 from config import CHAT_MODEL
+from language import contains_chinese
 from retriever import format_context
 from state import RagState
 
@@ -31,13 +32,44 @@ factions, or codexes. Cite source file and page numbers in the answer.
 If the question asks about a faction, army, codex, unit, or rules source that is
 not present in the PDF context, say that the knowledge base does not contain that
 source instead of answering from a different faction or codex.
-Answer in {state.get("answer_language", "English")}, matching the user's question
-language even if the PDF context is in another language.
+The user's question language is {state.get("answer_language", "English")}.
+You must answer in {state.get("answer_language", "English")}. Do not switch to
+the PDF context language when it differs from the user's question language.
 
 Question: {state["question"]}
 
 PDF context:
 {context}
 """
-    answer = llm.invoke(prompt).content
-    return {"answer": str(answer).strip()}
+    answer = str(llm.invoke(prompt).content).strip()
+    answer = enforce_answer_language(answer, state.get("answer_language", "English"), llm)
+    return {"answer": answer}
+
+
+def enforce_answer_language(answer: str, answer_language: str, llm: ChatOpenAI) -> str:
+    """Translate the answer if the model ignored the requested output language."""
+    if answer_language == "English" and is_mostly_chinese(answer):
+        return translate_answer(answer, "English", llm)
+    if answer_language == "Chinese" and not contains_chinese(answer):
+        return translate_answer(answer, "Chinese", llm)
+    return answer
+
+
+def is_mostly_chinese(text: str) -> bool:
+    """Detect whether the answer body is predominantly Chinese text."""
+    chinese_chars = sum(1 for char in text if "\u4e00" <= char <= "\u9fff")
+    latin_chars = sum(1 for char in text if char.isascii() and char.isalpha())
+    return chinese_chars > max(40, latin_chars)
+
+
+def translate_answer(answer: str, target_language: str, llm: ChatOpenAI) -> str:
+    """Translate an already-grounded answer while preserving citations and terms."""
+    prompt = f"""
+Translate the following Warhammer rules answer into {target_language}. Preserve
+source citations, page numbers, unit names, rule names, and PDF file names. Do
+not add new information or change the meaning.
+
+Answer:
+{answer}
+"""
+    return str(llm.invoke(prompt).content).strip()
