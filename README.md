@@ -17,17 +17,7 @@ Edit `.env` and set `OPENAI_API_KEY`.
 
 Put one or more Warhammer rule PDFs under `knowledge_base/`. Chinese, English,
 and mixed-language PDFs are supported. Nested folders are
-allowed, for example:
-
-```text
-knowledge_base/
-  核心规则_第10版.pdf
-  星际战士圣典.pdf
-  core_rules_10th.pdf
-  codex_space_marines.pdf
-  泰伦虫族圣典.pdf
-  西格玛时代/雷铸神兵.pdf
-```
+allowed.
 
 ## Run
 
@@ -50,10 +40,13 @@ Prepare Query -> Rewrite -> Agent -> Should Retrieve -> Tool -> Check Relevance 
 2. Text pages are extracted with `pypdf`.
 3. Sparse/image-heavy pages are sent through `nodes/process_images.py`, which
    renders the page with PyMuPDF and extracts visible words with the configured
-   OCR vision model.
+   OCR vision model. OCR output is cached in `.cache/warhammer_ocr.json`.
 4. `retriever.py` indexes chunks and performs fast hybrid retrieval:
    embedding similarity plus Chinese/English keyword/IDF scoring.
-5. The graph rewrites the question into a concise bilingual rules query,
+5. Embeddings are cached in `.cache/warhammer_embeddings.json`, keyed by model,
+   document metadata, page, extraction method, and text hash. Existing chunks are
+   reused; only new or changed chunks are embedded again.
+6. The graph rewrites the question into a concise bilingual rules query,
    retrieves the most relevant chunks across all PDFs, grades relevance, and
    answers only from the cited context.
 
@@ -64,6 +57,11 @@ Prepare Query -> Rewrite -> Agent -> Should Retrieve -> Tool -> Check Relevance 
 - `WARHAMMER_ENABLE_OCR`: set `0` to disable OCR
 - `WARHAMMER_OCR_TEXT_MIN_CHARS`: OCR pages with less extracted text than this
   threshold, default `80`
+- OCR can be slow on the first run because it calls a vision model for sparse
+  pages. Keep `WARHAMMER_ENABLE_OCR=0` for fastest startup if your PDFs already
+  contain selectable text.
+- `EMBEDDING_MODEL`: configured in `config.py`; changing it automatically creates
+  different embedding cache keys
 ## Project Structure
 
 ```text

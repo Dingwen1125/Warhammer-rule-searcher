@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import re
 from collections import Counter
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 from langchain_openai import OpenAIEmbeddings
 
-from config import EMBEDDING_MODEL
+from config import EMBEDDING_CACHE_PATH, EMBEDDING_MODEL
 from state import Chunk
 
 
@@ -71,7 +75,7 @@ class InMemoryRetriever:
     def _ensure_index(self) -> None:
         if self.matrix is not None:
             return
-        vectors = self.embeddings.embed_documents([chunk.text for chunk in self.chunks])
+        vectors = load_or_create_embeddings(self.chunks, self.embeddings)
         self.matrix = self._normalize(np.array(vectors, dtype=np.float32))
 
     @staticmethod
@@ -99,6 +103,54 @@ def create_retriever_tool(retriever: InMemoryRetriever):
 
     retrieve_warhammer_rules.__name__ = "retrieve_warhammer_rules"
     return retrieve_warhammer_rules
+
+
+def load_or_create_embeddings(chunks: list[Chunk], embeddings: OpenAIEmbeddings) -> list[list[float]]:
+    cache = load_embedding_cache(EMBEDDING_CACHE_PATH)
+    entries: dict[str, list[float]] = cache.setdefault("entries", {})
+    keys = [embedding_cache_key(chunk) for chunk in chunks]
+    missing_indexes = [index for index, key in enumerate(keys) if key not in entries]
+    if missing_indexes:
+        missing_vectors = embeddings.embed_documents(
+            [chunks[index].text for index in missing_indexes]
+        )
+        for index, vector in zip(missing_indexes, missing_vectors, strict=True):
+            entries[keys[index]] = vector
+        save_embedding_cache(EMBEDDING_CACHE_PATH, cache)
+    return [entries[key] for key in keys]
+
+
+def load_embedding_cache(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"version": 1, "entries": {}}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"version": 1, "entries": {}}
+    if raw.get("version") != 1 or not isinstance(raw.get("entries"), dict):
+        return {"version": 1, "entries": {}}
+    return raw
+
+
+def save_embedding_cache(path: Path, cache: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(cache, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+
+
+def embedding_cache_key(chunk: Chunk) -> str:
+    payload = {
+        "model": EMBEDDING_MODEL,
+        "document_id": chunk.document_id,
+        "source": chunk.source,
+        "page": chunk.page,
+        "extraction_method": chunk.extraction_method,
+        "text_hash": hashlib.sha256(chunk.text.encode("utf-8")).hexdigest(),
+    }
+    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def format_context(chunks: list[Chunk]) -> str:
