@@ -25,6 +25,9 @@ context. If the context does not contain enough information, say what is missing
 When relevant chunks come from different files, identify which source you are
 using and do not merge incompatible rules from different game systems, editions,
 factions, or codexes. Cite source file and page numbers in the answer.
+If the question asks about a faction, army, codex, unit, or rules source that is
+not present in the PDF context, say that the knowledge base does not contain that
+source instead of answering from a different faction or codex.
 Answer in {state.get("answer_language", "English")}, matching the user's question
 language even if the PDF context is in another language.
 

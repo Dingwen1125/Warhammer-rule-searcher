@@ -39,8 +39,14 @@ class InMemoryRetriever:
             [self._keyword_score(query, index) for index in range(len(self.chunks))],
             dtype=np.float32,
         )
+        source_scores = np.array(
+            [self._source_score(query, index) for index in range(len(self.chunks))],
+            dtype=np.float32,
+        )
         scores = (0.72 * normalize_scores(vector_scores)) + (
             0.28 * normalize_scores(keyword_scores)
+        ) + (
+            0.35 * normalize_scores(source_scores)
         )
         indexes = np.argsort(scores)[::-1][:k]
         return [
@@ -54,6 +60,7 @@ class InMemoryRetriever:
                 score=float(scores[index]),
                 vector_score=float(vector_scores[index]),
                 keyword_score=float(keyword_scores[index]),
+                source_score=float(source_scores[index]),
             )
             for index in indexes
         ]
@@ -72,11 +79,28 @@ class InMemoryRetriever:
             score += idf * (1 + math.log(chunk_terms[term]))
         return score / max(1, len(query_terms))
 
+    def _source_score(self, query: str, index: int) -> float:
+        query_terms = meaningful_terms(tokenize(query))
+        if not query_terms:
+            return 0.0
+        chunk = self.chunks[index]
+        source_terms = set(
+            meaningful_terms(tokenize(f"{chunk.document_id} {chunk.source} {chunk.title}"))
+        )
+        if not source_terms:
+            return 0.0
+        matched_terms = [term for term in query_terms if term in source_terms]
+        return len(matched_terms) / len(query_terms)
+
     def _ensure_index(self) -> None:
         if self.matrix is not None:
             return
         vectors = load_or_create_embeddings(self.chunks, self.embeddings)
         self.matrix = self._normalize(np.array(vectors, dtype=np.float32))
+
+    def build_index(self) -> None:
+        """Create and cache document embeddings without running a search."""
+        self._ensure_index()
 
     @staticmethod
     def _normalize(matrix: np.ndarray) -> np.ndarray:
@@ -120,6 +144,15 @@ def load_or_create_embeddings(chunks: list[Chunk], embeddings: OpenAIEmbeddings)
     return [entries[key] for key in keys]
 
 
+def embedding_cache_status(chunks: list[Chunk]) -> tuple[int, int, int]:
+    cache = load_embedding_cache(EMBEDDING_CACHE_PATH)
+    entries: dict[str, list[float]] = cache.setdefault("entries", {})
+    keys = [embedding_cache_key(chunk) for chunk in chunks]
+    cached = sum(1 for key in keys if key in entries)
+    missing = len(keys) - cached
+    return len(keys), cached, missing
+
+
 def load_embedding_cache(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"version": 1, "entries": {}}
@@ -158,7 +191,8 @@ def format_context(chunks: list[Chunk]) -> str:
         (
             f"[{idx}] {chunk.title} ({chunk.source}), page {chunk.page}, "
             f"score {chunk.score:.3f}, vector {chunk.vector_score:.3f}, "
-            f"keyword {chunk.keyword_score:.3f}, extracted {chunk.extraction_method}\n"
+            f"keyword {chunk.keyword_score:.3f}, source {chunk.source_score:.3f}, "
+            f"extracted {chunk.extraction_method}\n"
             f"{chunk.text}"
         )
         for idx, chunk in enumerate(chunks, start=1)
@@ -179,6 +213,47 @@ def character_ngrams(text: str, size: int) -> list[str]:
     if len(text) < size:
         return []
     return [text[index : index + size] for index in range(len(text) - size + 1)]
+
+
+def meaningful_terms(tokens: list[str]) -> list[str]:
+    stopwords = {
+        "the",
+        "a",
+        "an",
+        "of",
+        "for",
+        "to",
+        "in",
+        "on",
+        "and",
+        "or",
+        "is",
+        "are",
+        "what",
+        "which",
+        "how",
+        "many",
+        "rule",
+        "rules",
+        "ability",
+        "abilities",
+        "skill",
+        "skills",
+        "codex",
+        "index",
+        "中文",
+        "规则",
+        "技能",
+        "种族",
+        "是什么",
+        "多少",
+        "几个",
+    }
+    return [
+        token
+        for token in tokens
+        if token not in stopwords and (len(token) > 1 or token.isdigit())
+    ]
 
 
 def normalize_scores(scores: np.ndarray) -> np.ndarray:

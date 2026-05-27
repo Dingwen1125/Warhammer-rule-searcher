@@ -15,6 +15,7 @@ class Chunk:
     score: float = 0.0
     vector_score: float = 0.0
     keyword_score: float = 0.0
+    source_score: float = 0.0
 
 
 class RagState(TypedDict, total=False):

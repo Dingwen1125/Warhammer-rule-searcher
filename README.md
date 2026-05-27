@@ -26,6 +26,18 @@ python3 warhammer_agent.py "星际战士单位可以在推进后冲锋吗？"
 python3 warhammer_agent.py "Can a Space Marines unit advance and charge?"
 ```
 
+## Index New PDFs
+
+After adding PDFs to `knowledge_base/`, precompute embeddings for only new or
+changed chunks:
+
+```bash
+python3 index_knowledge_base.py
+```
+
+The command updates `.cache/warhammer_embeddings.json` and skips chunks that are
+already cached.
+
 ## Workflow
 
 ```text
@@ -66,6 +78,7 @@ Prepare Query -> Rewrite -> Agent -> Should Retrieve -> Tool -> Check Relevance 
 
 ```text
 warhammer_agent.py           CLI entry point and agent application code
+index_knowledge_base.py      Precompute and cache missing embeddings
 graph.py                    LangGraph workflow assembly
 state.py                    Shared RagState and Chunk types
 config.py                   Model, OCR, and knowledge-base settings
