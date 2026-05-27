@@ -1,3 +1,5 @@
+"""Answer-generation node grounded only in retrieved PDF context."""
+
 from __future__ import annotations
 
 from langchain_openai import ChatOpenAI
@@ -8,6 +10,7 @@ from state import RagState
 
 
 def generate(state: RagState) -> RagState:
+    """Generate a final answer from relevant retrieved chunks only."""
     if not state.get("relevant_chunks"):
         return {
             "answer": (

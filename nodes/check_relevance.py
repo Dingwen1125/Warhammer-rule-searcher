@@ -1,3 +1,5 @@
+"""Relevance grading node that blocks unrelated or wrong-source retrievals."""
+
 from __future__ import annotations
 
 import math
@@ -11,6 +13,7 @@ from state import RagState
 
 
 def check_relevance(state: RagState) -> RagState:
+    """Grade whether retrieved chunks can answer the current question."""
     if has_unmatched_requested_source(state):
         return {
             "relevant_chunks": [],
@@ -45,6 +48,7 @@ Retrieved chunks:
 
 
 def has_unmatched_requested_source(state: RagState) -> bool:
+    """Detect likely source/faction mismatches before asking the LLM grader."""
     query_text = " ".join(
         value
         for value in (
@@ -71,6 +75,7 @@ def has_unmatched_requested_source(state: RagState) -> bool:
 
 
 def relevance_route(state: RagState) -> Literal["generate", "rewrite", "no_answer"]:
+    """Choose whether to answer, rewrite and retry, or stop with no answer."""
     attempts = state.get("attempts", 0)
     best_score = max((chunk.score for chunk in state.get("chunks", [])), default=-math.inf)
     has_relevant_chunks = bool(state.get("relevant_chunks"))

@@ -1,3 +1,5 @@
+"""OCR helpers for extracting text from image-heavy PDF pages."""
+
 from __future__ import annotations
 
 import base64
@@ -48,6 +50,7 @@ def extract_page_image_text(path: Path, page_number: int) -> str:
 
 
 def load_ocr_cache(path: Path) -> dict[str, Any]:
+    """Read cached OCR text, falling back to an empty cache if invalid."""
     if not path.exists():
         return {"version": 1, "entries": {}}
     try:
@@ -60,6 +63,7 @@ def load_ocr_cache(path: Path) -> dict[str, Any]:
 
 
 def save_ocr_cache(path: Path, cache: dict[str, Any]) -> None:
+    """Persist OCR cache entries to disk."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(cache, ensure_ascii=False, separators=(",", ":")),
@@ -68,6 +72,7 @@ def save_ocr_cache(path: Path, cache: dict[str, Any]) -> None:
 
 
 def ocr_cache_key(path: Path, page_number: int) -> str:
+    """Build a cache key that changes when the PDF file or OCR model changes."""
     stat = path.stat()
     payload = {
         "model": OCR_MODEL or CHAT_MODEL,
@@ -81,6 +86,7 @@ def ocr_cache_key(path: Path, page_number: int) -> str:
 
 
 def render_pdf_page(path: Path, page_number: int) -> bytes:
+    """Render one PDF page as PNG bytes for vision OCR."""
     try:
         import fitz  # PyMuPDF
     except ImportError as error:

@@ -1,3 +1,5 @@
+"""Shared state and chunk data structures for the Warhammer RAG graph."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

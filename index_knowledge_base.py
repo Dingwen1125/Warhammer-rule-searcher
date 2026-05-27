@@ -13,6 +13,7 @@ from retriever import embedding_cache_status, index_documents
 
 
 def main() -> None:
+    """Precompute missing document embeddings and report cache status."""
     load_dotenv()
     if not os.getenv("OPENAI_API_KEY"):
         raise SystemExit("Set OPENAI_API_KEY before indexing the knowledge base.")

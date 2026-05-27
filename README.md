@@ -1,9 +1,8 @@
 # Warhammer Rules LangGraph RAG Agent
 
-This project builds a custom RAG agent for Chinese and English Warhammer rule
+This project builds a custom RAG agent for Warhammer rule
 PDFs. It can read multiple local PDFs, OCR image-heavy pages with a vision
-model, use fast hybrid keyword/vector retrieval to select the right
-rulebook/codex/faction file, and answer with source/page citations.
+model, and answer with source/page citations.
 
 ## Setup
 
@@ -15,8 +14,7 @@ cp .env.example .env
 
 Edit `.env` and set `OPENAI_API_KEY`.
 
-Put one or more Warhammer rule PDFs under `knowledge_base/`. Chinese, English,
-and mixed-language PDFs are supported. Nested folders are
+Put one or more Warhammer rule PDFs under `knowledge_base/`. all language rule PDFs are supported. Nested folders are
 allowed.
 
 ## Run

@@ -1,3 +1,5 @@
+"""Query rewrite node for producing bilingual Warhammer retrieval queries."""
+
 from __future__ import annotations
 
 from langchain_openai import ChatOpenAI
@@ -7,6 +9,7 @@ from state import RagState
 
 
 def rewrite_query(state: RagState) -> RagState:
+    """Rewrite the question into a bilingual search query for mixed PDF sources."""
     llm = ChatOpenAI(model=CHAT_MODEL, temperature=0.0)
     prompt = (
         "Convert the user question into a concise bilingual Warhammer rules "

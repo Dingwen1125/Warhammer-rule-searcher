@@ -1,3 +1,5 @@
+"""Fast hybrid retriever with cached embeddings and bilingual keyword scoring."""
+
 from __future__ import annotations
 
 import hashlib
@@ -16,7 +18,10 @@ from state import Chunk
 
 
 class InMemoryRetriever:
+    """In-memory hybrid retriever over cached document embeddings."""
+
     def __init__(self, chunks: list[Chunk]) -> None:
+        """Store chunks and prepare local keyword statistics for retrieval."""
         if not chunks:
             raise ValueError("No text chunks were loaded from the PDF.")
         self.chunks = chunks
@@ -28,6 +33,7 @@ class InMemoryRetriever:
         )
 
     def search(self, query: str, k: int = 6) -> list[Chunk]:
+        """Return the top chunks using vector, keyword, and source-name scores."""
         self._ensure_index()
         query_vector = self._normalize(
             np.array([self.embeddings.embed_query(query)], dtype=np.float32)
@@ -66,6 +72,7 @@ class InMemoryRetriever:
         ]
 
     def _keyword_score(self, query: str, index: int) -> float:
+        """Score one chunk by bilingual token overlap with IDF weighting."""
         query_terms = tokenize(query)
         if not query_terms:
             return 0.0
@@ -80,6 +87,7 @@ class InMemoryRetriever:
         return score / max(1, len(query_terms))
 
     def _source_score(self, query: str, index: int) -> float:
+        """Score whether the query terms match the chunk's file/title metadata."""
         query_terms = meaningful_terms(tokenize(query))
         if not query_terms:
             return 0.0
@@ -93,6 +101,7 @@ class InMemoryRetriever:
         return len(matched_terms) / len(query_terms)
 
     def _ensure_index(self) -> None:
+        """Load cached vectors or create missing embeddings before searching."""
         if self.matrix is not None:
             return
         vectors = load_or_create_embeddings(self.chunks, self.embeddings)
@@ -104,6 +113,7 @@ class InMemoryRetriever:
 
     @staticmethod
     def _normalize(matrix: np.ndarray) -> np.ndarray:
+        """Normalize vectors so dot products behave like cosine similarity."""
         norms = np.linalg.norm(matrix, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
         return matrix / norms
@@ -130,6 +140,7 @@ def create_retriever_tool(retriever: InMemoryRetriever):
 
 
 def load_or_create_embeddings(chunks: list[Chunk], embeddings: OpenAIEmbeddings) -> list[list[float]]:
+    """Return vectors for chunks, embedding only cache misses."""
     cache = load_embedding_cache(EMBEDDING_CACHE_PATH)
     entries: dict[str, list[float]] = cache.setdefault("entries", {})
     keys = [embedding_cache_key(chunk) for chunk in chunks]
@@ -145,6 +156,7 @@ def load_or_create_embeddings(chunks: list[Chunk], embeddings: OpenAIEmbeddings)
 
 
 def embedding_cache_status(chunks: list[Chunk]) -> tuple[int, int, int]:
+    """Return total, cached, and missing embedding counts for a chunk list."""
     cache = load_embedding_cache(EMBEDDING_CACHE_PATH)
     entries: dict[str, list[float]] = cache.setdefault("entries", {})
     keys = [embedding_cache_key(chunk) for chunk in chunks]
@@ -154,6 +166,7 @@ def embedding_cache_status(chunks: list[Chunk]) -> tuple[int, int, int]:
 
 
 def load_embedding_cache(path: Path) -> dict[str, Any]:
+    """Read the JSON embedding cache, falling back to an empty cache if invalid."""
     if not path.exists():
         return {"version": 1, "entries": {}}
     try:
@@ -166,6 +179,7 @@ def load_embedding_cache(path: Path) -> dict[str, Any]:
 
 
 def save_embedding_cache(path: Path, cache: dict[str, Any]) -> None:
+    """Write the embedding cache JSON to disk."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(cache, ensure_ascii=False, separators=(",", ":")),
@@ -174,6 +188,7 @@ def save_embedding_cache(path: Path, cache: dict[str, Any]) -> None:
 
 
 def embedding_cache_key(chunk: Chunk) -> str:
+    """Build a stable cache key that changes when chunk text or metadata changes."""
     payload = {
         "model": EMBEDDING_MODEL,
         "document_id": chunk.document_id,
@@ -187,6 +202,7 @@ def embedding_cache_key(chunk: Chunk) -> str:
 
 
 def format_context(chunks: list[Chunk]) -> str:
+    """Format retrieved chunks with scores and citations for LLM prompts."""
     return "\n\n".join(
         (
             f"[{idx}] {chunk.title} ({chunk.source}), page {chunk.page}, "
@@ -200,6 +216,7 @@ def format_context(chunks: list[Chunk]) -> str:
 
 
 def tokenize(text: str) -> list[str]:
+    """Tokenize mixed English/Chinese text for keyword retrieval."""
     tokens = re.findall(r"[a-z0-9][a-z0-9'_-]*", text.lower())
     chinese_runs = re.findall(r"[\u4e00-\u9fff]+", text)
     for run in chinese_runs:
@@ -210,12 +227,14 @@ def tokenize(text: str) -> list[str]:
 
 
 def character_ngrams(text: str, size: int) -> list[str]:
+    """Create fixed-size character n-grams for Chinese keyword matching."""
     if len(text) < size:
         return []
     return [text[index : index + size] for index in range(len(text) - size + 1)]
 
 
 def meaningful_terms(tokens: list[str]) -> list[str]:
+    """Drop generic words so source-name matching focuses on proper terms."""
     stopwords = {
         "the",
         "a",
@@ -257,6 +276,7 @@ def meaningful_terms(tokens: list[str]) -> list[str]:
 
 
 def normalize_scores(scores: np.ndarray) -> np.ndarray:
+    """Scale a score vector into the 0..1 range for weighted mixing."""
     if scores.size == 0:
         return scores
     minimum = float(np.min(scores))

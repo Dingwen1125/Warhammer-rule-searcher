@@ -1,3 +1,5 @@
+"""Routing node that decides whether a question should retrieve rule context."""
+
 from __future__ import annotations
 
 from typing import Literal
@@ -9,6 +11,7 @@ from state import RagState
 
 
 def agent(state: RagState) -> RagState:
+    """Route Warhammer rules questions into retrieval or stop unrelated queries."""
     route_text = f"{state['question']} {state.get('search_query', '')}".lower()
     warhammer_terms = {
         "warhammer",
@@ -80,4 +83,5 @@ Rules search query: {state.get("search_query", "")}
 
 
 def should_retrieve(state: RagState) -> Literal["continue", "end"]:
+    """Map the routing decision into LangGraph edge labels."""
     return "continue" if state.get("should_retrieve", True) else "end"

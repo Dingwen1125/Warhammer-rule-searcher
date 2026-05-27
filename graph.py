@@ -1,3 +1,5 @@
+"""LangGraph workflow assembly for the Warhammer rules agent."""
+
 from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
@@ -14,6 +16,7 @@ from state import RagState
 
 
 def build_graph(retriever: InMemoryRetriever):
+    """Compile the retrieval, grading, rewrite, and answer-generation workflow."""
     graph = StateGraph(RagState)
     graph.add_node("prepare_query", prepare_query)
     graph.add_node("agent", agent)

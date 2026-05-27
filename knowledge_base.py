@@ -1,3 +1,5 @@
+"""PDF discovery, extraction, optional OCR, and chunking for the rule library."""
+
 from __future__ import annotations
 
 import logging
@@ -34,6 +36,7 @@ def fetch_documents() -> list[Path]:
 
 
 def ensure_knowledge_base() -> None:
+    """Fail early if no rule PDFs are available."""
     fetch_documents()
 
 
@@ -47,6 +50,7 @@ def preprocess_documents(paths: list[Path]) -> list[Chunk]:
 
 
 def load_pdf_chunks(path: Path) -> list[Chunk]:
+    """Extract one PDF into page-aware chunks, using OCR for sparse pages."""
     reader = PdfReader(str(path))
     chunks: list[Chunk] = []
     for page_number, page in enumerate(reader.pages, start=1):
@@ -73,15 +77,18 @@ def load_pdf_chunks(path: Path) -> list[Chunk]:
 
 
 def should_ocr_page(text: str) -> bool:
+    """Decide whether extracted text is too sparse and needs vision OCR."""
     return ENABLE_OCR and len(text.strip()) < OCR_TEXT_MIN_CHARS
 
 
 def merge_extracted_text(text: str, ocr_text: str) -> str:
+    """Combine embedded PDF text and OCR text without empty sections."""
     parts = [part.strip() for part in (text, ocr_text) if part.strip()]
     return "\n\n".join(parts)
 
 
 def document_id(path: Path) -> str:
+    """Return a stable knowledge-base-relative identifier for a document."""
     try:
         relative = path.relative_to(KNOWLEDGE_BASE_DIR)
     except ValueError:
@@ -90,10 +97,12 @@ def document_id(path: Path) -> str:
 
 
 def document_title(path: Path) -> str:
+    """Convert a file stem into a readable title for citations and scoring."""
     return path.stem.replace("_", " ").replace("-", " ").strip().title()
 
 
 def split_text(text: str, chunk_size: int = 1000, overlap: int = 160) -> list[str]:
+    """Split normalized page text into overlapping retrievable chunks."""
     normalized = re.sub(r"\s+", " ", text).strip()
     if not normalized:
         return []

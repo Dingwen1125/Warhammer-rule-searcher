@@ -21,6 +21,7 @@ from state import RagState
 
 
 def ask(question: str) -> RagState:
+    """Run one question through document loading, retrieval setup, and the graph."""
     load_dotenv()
     if not os.getenv("OPENAI_API_KEY"):
         raise RuntimeError("Set OPENAI_API_KEY before running the RAG agent.")
@@ -32,6 +33,7 @@ def ask(question: str) -> RagState:
 
 
 def main() -> None:
+    """Parse CLI arguments, run the agent, and print the final answer."""
     parser = argparse.ArgumentParser(description="Ask the Warhammer rules RAG agent.")
     parser.add_argument("question", nargs="?", default="Can this unit advance and charge?")
     args = parser.parse_args()

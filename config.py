@@ -1,3 +1,5 @@
+"""Central configuration for models, cache paths, OCR, and knowledge-base files."""
+
 from __future__ import annotations
 
 import os
