@@ -1,23 +1,42 @@
-# Monster Hunter LangGraph RAG Agent
+# Warhammer Rules LangGraph RAG Agent
 
-This project builds a custom RAG agent with LangGraph over a small Monster Hunter PDF knowledge base.
+This project builds a custom RAG agent for Chinese and English Warhammer rule
+PDFs. It can read multiple local PDFs, OCR image-heavy pages with a vision
+model, use fast hybrid keyword/vector retrieval to select the right
+rulebook/codex/faction file, and answer with source/page citations.
 
 ## Setup
 
 ```bash
 source .venv/bin/activate
+pip install -r requirements.txt
 cp .env.example .env
 ```
 
 Edit `.env` and set `OPENAI_API_KEY`.
 
+Put one or more Warhammer rule PDFs under `knowledge_base/`. Chinese, English,
+and mixed-language PDFs are supported. Nested folders are
+allowed, for example:
+
+```text
+knowledge_base/
+  核心规则_第10版.pdf
+  星际战士圣典.pdf
+  core_rules_10th.pdf
+  codex_space_marines.pdf
+  泰伦虫族圣典.pdf
+  西格玛时代/雷铸神兵.pdf
+```
+
 ## Run
 
 ```bash
-python monster_hunter_rag_agent.py "How should I fight Rathalos?"
+python3 warhammer_agent.py "星际战士单位可以在推进后冲锋吗？"
+python3 warhammer_agent.py "Can a Space Marines unit advance and charge?"
 ```
 
-The workflow matches the diagram:
+## Workflow
 
 ```text
 Prepare Query -> Rewrite -> Agent -> Should Retrieve -> Tool -> Check Relevance -> Generate -> Answer
@@ -27,25 +46,36 @@ Prepare Query -> Rewrite -> Agent -> Should Retrieve -> Tool -> Check Relevance 
                                    Rewrite -> Agent
 ```
 
-The agent follows the requested RAG setup:
+1. `knowledge_base.py` finds every PDF under `knowledge_base/`.
+2. Text pages are extracted with `pypdf`.
+3. Sparse/image-heavy pages are sent through `nodes/process_images.py`, which
+   renders the page with PyMuPDF and extracts visible words with the configured
+   OCR vision model.
+4. `retriever.py` indexes chunks and performs fast hybrid retrieval:
+   embedding similarity plus Chinese/English keyword/IDF scoring.
+5. The graph rewrites the question into a concise bilingual rules query,
+   retrieves the most relevant chunks across all PDFs, grades relevance, and
+   answers only from the cited context.
 
-1. Fetch and preprocess documents in `knowledge_base.py`.
-2. Index preprocessed chunks for semantic search and create the retriever tool in `retriever.py`.
-3. Build an agentic LangGraph RAG workflow in `graph.py`, where `nodes/agent.py` decides whether to call `nodes/retrieve_tool.py`.
+## Configuration
 
-The agent loads `knowledge_base/monster_hunter_field_guide.pdf`, embeds PDF chunks, retrieves relevant context, grades whether the retrieved chunks answer the question, optionally rewrites weak search queries, and generates an answer with citations.
-
+- `OPENAI_MODEL`: chat/rewrite/relevance/answer model, default `gpt-4.1-mini`
+- `OPENAI_OCR_MODEL`: vision OCR model, default same as `OPENAI_MODEL`
+- `WARHAMMER_ENABLE_OCR`: set `0` to disable OCR
+- `WARHAMMER_OCR_TEXT_MIN_CHARS`: OCR pages with less extracted text than this
+  threshold, default `80`
 ## Project Structure
 
 ```text
-monster_hunter_rag_agent.py  CLI entry point
+warhammer_agent.py           CLI entry point and agent application code
 graph.py                    LangGraph workflow assembly
 state.py                    Shared RagState and Chunk types
-config.py                   Model and knowledge-base settings
+config.py                   Model, OCR, and knowledge-base settings
 env.py                      Local .env loader
-knowledge_base.py           Fetch and preprocess documents
-retriever.py                Index documents and create retriever tool
+knowledge_base.py           Multi-PDF extraction, OCR, and chunking
+retriever.py                Fast hybrid retrieval and context formatting
 nodes/agent.py              Agent node and should-retrieve route
+nodes/process_images.py     OCR node for image-heavy PDF pages
 nodes/prepare_query.py      Detects answer language
 nodes/retrieve_tool.py      Retrieval tool node
 nodes/check_relevance.py    Relevance grading node and route
@@ -53,11 +83,3 @@ nodes/rewrite_query.py      Query rewrite node
 nodes/generate.py           Answer generation node
 nodes/no_answer.py          Stops when PDF context is not relevant
 ```
-
-Models:
-
-- Chat / agent / rewrite / relevance grading / answer generation: `gpt-4.1-mini`
-- Embeddings / vector retrieval: `text-embedding-3-small`
-
-Questions in any language are converted to an English search query in the Rewrite
-node for the English PDF knowledge base, then answered in the user's language.

@@ -20,10 +20,13 @@ def generate(state: RagState) -> RagState:
     chunks = state["relevant_chunks"]
     context = format_context(chunks)
     prompt = f"""
-You are a practical Monster Hunter guide. Answer only from the provided PDF
+You are a careful Warhammer rules assistant. Answer only from the provided PDF
 context. If the context does not contain enough information, say what is missing.
-Give concrete hunting advice.
-Answer in {state.get("answer_language", "English")}.
+When relevant chunks come from different files, identify which source you are
+using and do not merge incompatible rules from different game systems, editions,
+factions, or codexes. Cite source file and page numbers in the answer.
+Answer in {state.get("answer_language", "English")}, matching the user's question
+language even if the PDF context is in another language.
 
 Question: {state["question"]}
 

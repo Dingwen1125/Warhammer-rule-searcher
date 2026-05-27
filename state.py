@@ -9,7 +9,12 @@ class Chunk:
     text: str
     source: str
     page: int
+    document_id: str
+    title: str
+    extraction_method: str = "text"
     score: float = 0.0
+    vector_score: float = 0.0
+    keyword_score: float = 0.0
 
 
 class RagState(TypedDict, total=False):

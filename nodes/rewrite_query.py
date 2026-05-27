@@ -9,10 +9,15 @@ from state import RagState
 def rewrite_query(state: RagState) -> RagState:
     llm = ChatOpenAI(model=CHAT_MODEL, temperature=0.0)
     prompt = (
-        "Convert the user question from any language into a concise English "
-        "Monster Hunter knowledge-base search query for an English PDF. Preserve "
-        "monster names, weapon names, item names, and game terms. Return only the "
-        "English search query.\n\n"
+        "Convert the user question into a concise bilingual Warhammer rules "
+        "search query for a hybrid search system over multiple Chinese and English "
+        "rule PDFs. Keep the user's original important terms, then add likely "
+        "official equivalents in the other language when useful. Preserve faction "
+        "names, unit names, detachments, stratagems, abilities, weapon names, "
+        "keywords, edition names, numbers, and exact rule terms. If the question "
+        "names a faction, army, codex, or camp, keep it in the query so the "
+        "retriever can choose the right PDF. Return only the search query, not an "
+        "answer.\n\n"
         f"Original question: {state['question']}\n"
         f"Current search query: {state.get('search_query', state['question'])}"
     )

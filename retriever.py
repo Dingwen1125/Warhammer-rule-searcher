@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import math
+import re
+from collections import Counter
+
 import numpy as np
 from langchain_openai import OpenAIEmbeddings
 
@@ -14,25 +18,55 @@ class InMemoryRetriever:
         self.chunks = chunks
         self.embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
         self.matrix: np.ndarray | None = None
+        self.tokenized_chunks = [tokenize(chunk.text) for chunk in chunks]
+        self.document_frequencies = Counter(
+            token for tokens in self.tokenized_chunks for token in set(tokens)
+        )
 
-    def search(self, query: str, k: int = 4) -> list[Chunk]:
+    def search(self, query: str, k: int = 6) -> list[Chunk]:
         self._ensure_index()
         query_vector = self._normalize(
             np.array([self.embeddings.embed_query(query)], dtype=np.float32)
         )[0]
         if self.matrix is None:
             raise RuntimeError("The document index was not created.")
-        scores = self.matrix @ query_vector
+        vector_scores = self.matrix @ query_vector
+        keyword_scores = np.array(
+            [self._keyword_score(query, index) for index in range(len(self.chunks))],
+            dtype=np.float32,
+        )
+        scores = (0.72 * normalize_scores(vector_scores)) + (
+            0.28 * normalize_scores(keyword_scores)
+        )
         indexes = np.argsort(scores)[::-1][:k]
         return [
             Chunk(
                 text=self.chunks[index].text,
                 source=self.chunks[index].source,
                 page=self.chunks[index].page,
+                document_id=self.chunks[index].document_id,
+                title=self.chunks[index].title,
+                extraction_method=self.chunks[index].extraction_method,
                 score=float(scores[index]),
+                vector_score=float(vector_scores[index]),
+                keyword_score=float(keyword_scores[index]),
             )
             for index in indexes
         ]
+
+    def _keyword_score(self, query: str, index: int) -> float:
+        query_terms = tokenize(query)
+        if not query_terms:
+            return 0.0
+        chunk_terms = Counter(self.tokenized_chunks[index])
+        score = 0.0
+        total_chunks = len(self.chunks)
+        for term in query_terms:
+            if term not in chunk_terms:
+                continue
+            idf = math.log((1 + total_chunks) / (1 + self.document_frequencies[term])) + 1.0
+            score += idf * (1 + math.log(chunk_terms[term]))
+        return score / max(1, len(query_terms))
 
     def _ensure_index(self) -> None:
         if self.matrix is not None:
@@ -59,16 +93,48 @@ def index_documents(chunks: list[Chunk]) -> InMemoryRetriever:
 def create_retriever_tool(retriever: InMemoryRetriever):
     """Create the retrieval tool that the LangGraph agent workflow can call."""
 
-    def retrieve_monster_hunter_docs(query: str, k: int = 4) -> list[Chunk]:
-        """Search the Monster Hunter knowledge base for relevant PDF chunks."""
+    def retrieve_warhammer_rules(query: str, k: int = 6) -> list[Chunk]:
+        """Hybrid-search the Warhammer rules knowledge base for relevant chunks."""
         return retriever.search(query, k=k)
 
-    retrieve_monster_hunter_docs.__name__ = "retrieve_monster_hunter_docs"
-    return retrieve_monster_hunter_docs
+    retrieve_warhammer_rules.__name__ = "retrieve_warhammer_rules"
+    return retrieve_warhammer_rules
 
 
 def format_context(chunks: list[Chunk]) -> str:
     return "\n\n".join(
-        f"[{idx}] {chunk.source}, page {chunk.page}, score {chunk.score:.3f}\n{chunk.text}"
+        (
+            f"[{idx}] {chunk.title} ({chunk.source}), page {chunk.page}, "
+            f"score {chunk.score:.3f}, vector {chunk.vector_score:.3f}, "
+            f"keyword {chunk.keyword_score:.3f}, extracted {chunk.extraction_method}\n"
+            f"{chunk.text}"
+        )
         for idx, chunk in enumerate(chunks, start=1)
     )
+
+
+def tokenize(text: str) -> list[str]:
+    tokens = re.findall(r"[a-z0-9][a-z0-9'_-]*", text.lower())
+    chinese_runs = re.findall(r"[\u4e00-\u9fff]+", text)
+    for run in chinese_runs:
+        tokens.append(run)
+        tokens.extend(character_ngrams(run, 2))
+        tokens.extend(character_ngrams(run, 3))
+    return tokens
+
+
+def character_ngrams(text: str, size: int) -> list[str]:
+    if len(text) < size:
+        return []
+    return [text[index : index + size] for index in range(len(text) - size + 1)]
+
+
+def normalize_scores(scores: np.ndarray) -> np.ndarray:
+    if scores.size == 0:
+        return scores
+    minimum = float(np.min(scores))
+    maximum = float(np.max(scores))
+    if math.isclose(minimum, maximum):
+        fill_value = 1.0 if maximum > 0 else 0.0
+        return np.full_like(scores, fill_value, dtype=np.float32)
+    return ((scores - minimum) / (maximum - minimum)).astype(np.float32)

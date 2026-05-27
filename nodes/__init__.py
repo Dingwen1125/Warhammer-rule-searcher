@@ -1,1 +1,1 @@
-"""LangGraph node functions for the Monster Hunter RAG workflow."""
+"""LangGraph node functions for the Warhammer rules RAG workflow."""

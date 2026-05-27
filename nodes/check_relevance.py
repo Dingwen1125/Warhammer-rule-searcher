@@ -14,7 +14,7 @@ def check_relevance(state: RagState) -> RagState:
     llm = ChatOpenAI(model=CHAT_MODEL, temperature=0.0)
     context = format_context(state.get("chunks", []))
     prompt = f"""
-You are checking whether retrieved PDF chunks are relevant to a Monster Hunter question.
+You are checking whether retrieved PDF chunks are relevant to a Warhammer rules question.
 Return the first line as YES or NO. On the second line, give a short reason.
 
 Question: {state["question"]}
@@ -35,7 +35,7 @@ def relevance_route(state: RagState) -> Literal["generate", "rewrite", "no_answe
     attempts = state.get("attempts", 0)
     best_score = max((chunk.score for chunk in state.get("chunks", [])), default=-math.inf)
     has_relevant_chunks = bool(state.get("relevant_chunks"))
-    found_relevant_content = has_relevant_chunks and best_score >= 0.18
+    found_relevant_content = has_relevant_chunks and best_score >= 0.12
     if found_relevant_content:
         return "generate"
     if attempts < 2:

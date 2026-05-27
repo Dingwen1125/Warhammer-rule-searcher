@@ -4,6 +4,10 @@ import os
 from pathlib import Path
 
 
-PDF_PATH = Path("knowledge_base/monster_hunter_field_guide.pdf")
+KNOWLEDGE_BASE_DIR = Path("knowledge_base")
+SUPPORTED_EXTENSIONS = {".pdf"}
 EMBEDDING_MODEL = "text-embedding-3-small"
 CHAT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+OCR_MODEL = os.getenv("OPENAI_OCR_MODEL", CHAT_MODEL)
+ENABLE_OCR = os.getenv("WARHAMMER_ENABLE_OCR", "1").lower() not in {"0", "false", "no"}
+OCR_TEXT_MIN_CHARS = int(os.getenv("WARHAMMER_OCR_TEXT_MIN_CHARS", "80"))
